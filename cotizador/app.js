@@ -389,6 +389,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
           <td>
             <div class="action-links">
               <button type="button" class="link-action" data-quote-view="${quote.id}">Ver / PDF</button>
+              <button type="button" class="link-action quote-send-action" data-quote-send="${quote.id}">Enviar</button>
               <button type="button" class="link-action" data-quote-edit="${quote.id}">Editar</button>
               <button type="button" class="link-action" data-quote-dup="${quote.id}">Duplicar</button>
               <button type="button" class="link-danger" data-quote-del="${quote.id}">Eliminar</button>
@@ -421,12 +422,15 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
 
   document.getElementById("quotes-table-body").addEventListener("click", async (e) => {
     const viewId = e.target.dataset.quoteView;
+    const sendId = e.target.dataset.quoteSend;
     const editId = e.target.dataset.quoteEdit;
     const dupId = e.target.dataset.quoteDup;
     const delId = e.target.dataset.quoteDel;
 
     if (viewId) {
       openQuotePreview(viewId);
+    } else if (sendId) {
+      openQuoteSendModal(sendId);
     } else if (editId) {
       openQuoteForm(editId);
     } else if (dupId) {
@@ -917,6 +921,70 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
     if (state.activeQuoteId) openQuoteForm(state.activeQuoteId);
   });
   document.getElementById("btn-preview-print").addEventListener("click", () => window.print());
+
+  function quoteEmailBody(quote) {
+    const items = (quote.items || [])
+      .map((item) => `- ${item.descripcion} | Cantidad: ${item.cantidad} | Total neto: ${formatCLP(item.total_neto)}`)
+      .join("\n");
+    return [
+      `Hola,`,
+      ``,
+      `Adjuntamos el resumen de la cotización N° ${quote.numero} de Electromach.`,
+      ``,
+      `Cliente: ${quote.cliente_nombre || ""}`,
+      `Fecha: ${formatDateCL(quote.fecha)}`,
+      `Validez: ${quote.validez_dias || 10} días`,
+      ``,
+      `Ítems:`,
+      items,
+      ``,
+      `Total neto: ${formatCLP(quote.total_neto)}`,
+      `IVA: ${formatCLP(quote.iva_monto)}`,
+      `Total con IVA: ${formatCLP(quote.total_con_iva)}`,
+      ``,
+      `Saludos,`,
+      state.settings.razon_social || "Electromach"
+    ].join("\n");
+  }
+
+  function openQuoteSendModal(quoteId) {
+    const quote = state.quotes.find((item) => item.id === quoteId);
+    if (!quote) return;
+    document.getElementById("quote-send-id").value = quote.id;
+    document.getElementById("quote-send-to").value = quote.cliente_correo || "";
+    document.getElementById("quote-send-subject").value = `Cotización N° ${quote.numero} · ${quote.cliente_nombre || "Electromach"}`;
+    document.getElementById("quote-send-message").value = quoteEmailBody(quote);
+    document.getElementById("quote-send-modal").classList.remove("hidden");
+    document.getElementById("quote-send-to").focus();
+  }
+
+  function closeQuoteSendModal() {
+    document.getElementById("quote-send-modal").classList.add("hidden");
+  }
+
+  document.getElementById("quote-send-close").addEventListener("click", closeQuoteSendModal);
+  document.getElementById("quote-send-cancel").addEventListener("click", closeQuoteSendModal);
+  document.getElementById("quote-send-modal").addEventListener("click", (event) => {
+    if (event.target.id === "quote-send-modal") closeQuoteSendModal();
+  });
+  document.getElementById("quote-send-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const recipients = document.getElementById("quote-send-to").value
+      .split(/[;,]+/)
+      .map((email) => email.trim())
+      .filter(Boolean);
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!recipients.length || recipients.some((email) => !validEmail.test(email))) {
+      showToast("Ingresa uno o más correos válidos.");
+      return;
+    }
+
+    const subject = document.getElementById("quote-send-subject").value.trim();
+    const message = document.getElementById("quote-send-message").value.trim();
+    window.location.href = `mailto:${recipients.join(",")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+    closeQuoteSendModal();
+    showToast("Se abrió tu aplicación de correo con la cotización preparada.");
+  });
 
   // ==================== 2. ÓRDENES TÉCNICAS ====================
   function renderOrdersTable() {
