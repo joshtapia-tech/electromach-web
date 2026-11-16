@@ -1,3 +1,5 @@
+const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
+
 // ============================================================================
 // ELECTROMACH · LÓGICA DE APLICACIÓN (COTIZACIONES, ÓRDENES, CLIENTES, ETC.)
 // ============================================================================
@@ -43,6 +45,8 @@
     quotes: [],
     orders: [],
     users: [],
+    inventory: [],
+    inventoryRequests: [],
     activeQuoteId: null,
     activeOrderId: null
   };
@@ -92,6 +96,14 @@
     return "loc-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
   }
 
+  function isOwner() {
+    return DUENOS_EMAILS.includes(String(state.user?.email || "").trim().toLowerCase());
+  }
+
+  function ownerDisplayName() {
+    return String(state.user?.email || "").toLowerCase().startsWith("gustavo") ? "Gustavo" : "Matías";
+  }
+
   // ==================== CAPA DE PERSISTENCIA (SUPABASE O LOCAL DEMO) ====================
   const LOCAL_KEY = "electromach_cotizador_demo_v1";
 
@@ -106,6 +118,8 @@
         state.quotes = parsed.quotes || [];
         state.orders = parsed.orders || [];
         state.users = parsed.users || [];
+        state.inventory = parsed.inventory || [];
+        state.inventoryRequests = parsed.inventoryRequests || [];
         return;
       }
     } catch (e) {
@@ -133,7 +147,9 @@
         products: state.products,
         quotes: state.quotes,
         orders: state.orders,
-        users: state.users
+        users: state.users,
+        inventory: state.inventory,
+        inventoryRequests: state.inventoryRequests
       })
     );
   }
@@ -242,13 +258,15 @@
   }
 
   async function loadAllFromSupabase() {
-    const [setRes, custRes, prodRes, quoteRes, ordRes, profRes] = await Promise.all([
+    const [setRes, custRes, prodRes, quoteRes, ordRes, profRes, inventoryRes, requestsRes] = await Promise.all([
       supabaseClient.from("settings").select("*").eq("id", 1).maybeSingle(),
       supabaseClient.from("customers").select("*").order("nombre", { ascending: true }),
       supabaseClient.from("products").select("*").order("descripcion", { ascending: true }),
       supabaseClient.from("quotes").select("*").order("numero", { ascending: false }),
       supabaseClient.from("technical_orders").select("*").order("numero", { ascending: false }),
-      supabaseClient.from("profiles").select("*").order("created_at", { ascending: true })
+      supabaseClient.from("profiles").select("*").order("created_at", { ascending: true }),
+      supabaseClient.from("inventario_materiales").select("*"),
+      supabaseClient.from("solicitudes_inventario").select("*")
     ]);
 
     if (setRes.data) Object.assign(state.settings, setRes.data);
@@ -257,6 +275,8 @@
     if (quoteRes.data) state.quotes = quoteRes.data;
     if (ordRes.data) state.orders = ordRes.data;
     if (profRes.data) state.users = profRes.data;
+    if (inventoryRes.data) state.inventory = inventoryRes.data;
+    if (requestsRes.data) state.inventoryRequests = requestsRes.data;
 
     // Actualizar nombre mostrado desde perfil si existe
     const me = state.users.find((u) => u.id === state.user.id);
@@ -282,6 +302,7 @@
       customers: "customers",
       products: "products",
       users: "users",
+      inventory: "inventory",
       settings: "settings"
     };
     const activeTab = navMap[viewName] || "quotes";
@@ -298,6 +319,7 @@
       if (target === "customers") renderCustomersTable();
       if (target === "products") renderProductsTable();
       if (target === "users") renderUsersTable();
+      if (target === "inventory") renderInventory();
       if (target === "settings") fillSettingsForm();
       switchView(target);
     });
@@ -309,6 +331,7 @@
     renderCustomersTable();
     renderProductsTable();
     renderUsersTable();
+    renderInventory();
     fillSettingsForm();
     refreshCustomerDropdowns();
     refreshProductDatalist();
@@ -1384,7 +1407,257 @@
     }
   });
 
-  // ==================== 5. USUARIOS ====================
+  // ==================== 5. INVENTARIO ====================
+  function inventoryStatus(material) {
+    const stock = Number(material.stock_actual) || 0;
+    const minimum = Number(material.stock_minimo) || 0;
+    if (stock <= 0) return { label: "Agotado", className: "inventory-status-out" };
+    if (stock <= minimum) return { label: "Stock bajo", className: "inventory-status-low" };
+    return { label: "Disponible", className: "inventory-status-ok" };
+  }
+
+  function inventoryName(material) {
+    return material.nombre_material || material.material || material.nombre || "Material sin nombre";
+  }
+
+  function renderInventoryMaterialOptions(selectedId) {
+    const select = document.getElementById("ir-material");
+    select.innerHTML =
+      '<option value="">— Seleccionar del inventario —</option>' +
+      state.inventory
+        .map((material) => `<option value="${escapeHTML(material.id)}" ${String(material.id) === String(selectedId || "") ? "selected" : ""}>${escapeHTML(material.codigo || "")} · ${escapeHTML(inventoryName(material))}</option>`)
+        .join("");
+  }
+
+  function renderInventory() {
+    const tbody = document.getElementById("inventory-table-body");
+    if (!tbody) return;
+    document.getElementById("inventory-owner-material-card").classList.toggle("hidden", !isOwner());
+    const query = document.getElementById("inventory-search").value.trim().toLowerCase();
+    const filter = document.getElementById("inventory-stock-filter").value;
+    const materials = state.inventory.filter((material) => {
+      const haystack = [material.codigo, inventoryName(material), material.categoria].join(" ").toLowerCase();
+      const status = inventoryStatus(material);
+      return (!query || haystack.includes(query)) && (!filter || status.label !== "Disponible");
+    });
+
+    tbody.innerHTML = materials.length
+      ? materials.map((material) => {
+          const status = inventoryStatus(material);
+          const stock = Number(material.stock_actual) || 0;
+          const minimum = Number(material.stock_minimo) || 0;
+          const unit = material.unidad ? ` ${escapeHTML(material.unidad)}` : "";
+          return `
+            <tr data-inventory-id="${escapeHTML(material.id)}">
+              <td><strong>${escapeHTML(material.codigo || "—")}</strong></td>
+              <td>${escapeHTML(inventoryName(material))}</td>
+              <td>${escapeHTML(material.categoria || "—")}</td>
+              <td><div class="inventory-stock-control"><button type="button" class="btn btn-secondary btn-sm inventory-adjust" data-adjust="-1">−</button><input class="inventory-stock-input" type="number" min="0" value="${stock}" aria-label="Stock actual">${unit}<button type="button" class="btn btn-secondary btn-sm inventory-adjust" data-adjust="1">+</button></div></td>
+              <td>${minimum}${unit}</td>
+              <td><span class="inventory-status ${status.className}">${status.label}</span></td>
+              <td><div class="inventory-actions"><button type="button" class="link-action inventory-request" ${status.label === "Disponible" ? "" : ""}>Pedir reposición</button>${isOwner() ? `<button type="button" class="link-danger inventory-delete">Eliminar</button>` : ""}</div></td>
+            </tr>`;
+        }).join("")
+      : '<tr><td colspan="7" class="empty-state">No se encontraron materiales.</td></tr>';
+
+    renderInventoryMaterialOptions();
+    renderInventoryRequests();
+  }
+
+  function renderInventoryRequests() {
+    const tbody = document.getElementById("inventory-requests-body");
+    if (!tbody) return;
+    const requests = (isOwner()
+      ? state.inventoryRequests
+      : state.inventoryRequests.filter((request) => request.solicitante_id === state.user?.id)
+    ).slice().sort((a, b) => String(b.created_at || b.fecha_solicitud || "").localeCompare(String(a.created_at || a.fecha_solicitud || "")));
+    tbody.innerHTML = requests.length
+      ? requests.map((request) => `
+        <tr data-request-id="${escapeHTML(request.id)}">
+          <td>${formatDateCL(request.created_at || request.fecha_solicitud)}</td>
+          <td>${escapeHTML(request.solicitante_nombre || request.nombre_solicitante || "—")}</td>
+          <td>${escapeHTML(request.material_nombre || request.material || "—")}</td>
+          <td>${escapeHTML(request.cantidad_requerida)}</td>
+          <td><span class="inventory-urgency ${request.urgencia === "Urgente" ? "inventory-urgency-high" : ""}">${escapeHTML(request.urgencia || "Normal")}</span></td>
+          <td>${escapeHTML(request.motivo || "—")}</td>
+          <td>${isOwner() ? `<select class="inventory-request-status"><option ${request.estado === "Pendiente" ? "selected" : ""}>Pendiente</option><option ${request.estado === "Aprobado" ? "selected" : ""}>Aprobado</option><option ${request.estado === "Comprado" ? "selected" : ""}>Comprado</option><option ${request.estado === "Rechazado" ? "selected" : ""}>Rechazado</option></select>` : `<span class="inventory-request-state">${escapeHTML(request.estado || "Pendiente")}</span>`}</td>
+          <td>${isOwner() ? `<input class="inventory-response" value="${escapeHTML(request.respuesta_gerencia || "")}" placeholder="Nota de gerencia"><label class="inventory-purchased"><input type="checkbox" class="inventory-add-stock"> Sumar al stock</label>` : escapeHTML(request.respuesta_gerencia || "Sin respuesta")}</td>
+          <td>${isOwner() ? '<button type="button" class="btn btn-primary btn-sm inventory-save-request">Guardar</button>' : "—"}</td>
+        </tr>`).join("")
+      : '<tr><td colspan="9" class="empty-state">No hay solicitudes de stock.</td></tr>';
+  }
+
+  async function saveInventoryMaterialStock(material, stock) {
+    const nextStock = Math.max(0, Number(stock) || 0);
+    if (isSupabaseConfigured) {
+      const { data, error } = await supabaseClient.from("inventario_materiales").update({ stock_actual: nextStock }).eq("id", material.id).select().single();
+      if (error) throw error;
+      Object.assign(material, data);
+    } else {
+      material.stock_actual = nextStock;
+      saveLocalStore();
+    }
+    renderInventory();
+  }
+
+  document.getElementById("inventory-search").addEventListener("input", renderInventory);
+  document.getElementById("inventory-stock-filter").addEventListener("change", renderInventory);
+  document.getElementById("inventory-filter-btn").addEventListener("click", renderInventory);
+  document.getElementById("btn-new-inventory-request").addEventListener("click", () => {
+    document.getElementById("inventory-request-card").classList.remove("hidden");
+    document.getElementById("inventory-request-card").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.getElementById("btn-cancel-inventory-request").addEventListener("click", () => document.getElementById("inventory-request-card").classList.add("hidden"));
+
+  document.getElementById("inventory-table-body").addEventListener("click", async (event) => {
+    const row = event.target.closest("tr[data-inventory-id]");
+    if (!row) return;
+    const material = state.inventory.find((item) => String(item.id) === row.dataset.inventoryId);
+    if (!material) return;
+    if (event.target.classList.contains("inventory-request")) {
+      document.getElementById("inventory-request-card").classList.remove("hidden");
+      renderInventoryMaterialOptions(material.id);
+      document.getElementById("inventory-request-card").scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (event.target.classList.contains("inventory-adjust")) {
+      try {
+        await saveInventoryMaterialStock(material, (Number(material.stock_actual) || 0) + Number(event.target.dataset.adjust));
+        showToast("Stock actualizado");
+      } catch (error) {
+        showToast("Error al actualizar stock: " + error.message);
+      }
+    }
+    if (event.target.classList.contains("inventory-delete") && isOwner()) {
+      if (!confirm(`¿Eliminar "${inventoryName(material)}" del inventario?`)) return;
+      try {
+        if (isSupabaseConfigured) {
+          const { error } = await supabaseClient.from("inventario_materiales").delete().eq("id", material.id);
+          if (error) throw error;
+        }
+        state.inventory = state.inventory.filter((item) => item.id !== material.id);
+        saveLocalStore();
+        renderInventory();
+        showToast("Material eliminado");
+      } catch (error) {
+        showToast("Error al eliminar material: " + error.message);
+      }
+    }
+  });
+
+  document.getElementById("inventory-table-body").addEventListener("change", async (event) => {
+    if (!event.target.classList.contains("inventory-stock-input")) return;
+    const row = event.target.closest("tr[data-inventory-id]");
+    const material = state.inventory.find((item) => String(item.id) === row.dataset.inventoryId);
+    try {
+      await saveInventoryMaterialStock(material, event.target.value);
+      showToast("Stock actualizado");
+    } catch (error) {
+      showToast("Error al actualizar stock: " + error.message);
+      renderInventory();
+    }
+  });
+
+  document.getElementById("inventory-material-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!isOwner()) return;
+    const payload = {
+      codigo: document.getElementById("im-codigo").value.trim(),
+      nombre_material: document.getElementById("im-nombre").value.trim(),
+      categoria: document.getElementById("im-categoria").value.trim(),
+      stock_actual: Number(document.getElementById("im-stock").value) || 0,
+      stock_minimo: Number(document.getElementById("im-minimo").value) || 0,
+      unidad: document.getElementById("im-unidad").value.trim()
+    };
+    try {
+      const saved = isSupabaseConfigured
+        ? await supabaseClient.from("inventario_materiales").insert(payload).select().single()
+        : { data: { id: generateLocalUUID(), ...payload }, error: null };
+      if (saved.error) throw saved.error;
+      state.inventory.push(saved.data);
+      saveLocalStore();
+      event.target.reset();
+      renderInventory();
+      showToast("Material agregado al inventario");
+    } catch (error) {
+      showToast("Error al agregar material: " + error.message);
+    }
+  });
+
+  document.getElementById("inventory-request-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const selected = state.inventory.find((item) => String(item.id) === document.getElementById("ir-material").value);
+    const manualName = document.getElementById("ir-manual-material").value.trim();
+    const payload = {
+      material_id: selected?.id || null,
+      material_nombre: manualName || (selected ? inventoryName(selected) : ""),
+      cantidad_requerida: Number(document.getElementById("ir-quantity").value) || 0,
+      urgencia: document.getElementById("ir-urgency").value,
+      motivo: document.getElementById("ir-reason").value.trim(),
+      solicitante_id: state.user.id,
+      solicitante_nombre: state.user.nombre || state.user.email,
+      estado: "Pendiente"
+    };
+    if (!payload.material_nombre || payload.cantidad_requerida < 1) {
+      showToast("Selecciona o escribe un material y una cantidad válida");
+      return;
+    }
+    try {
+      const saved = isSupabaseConfigured
+        ? await supabaseClient.from("solicitudes_inventario").insert(payload).select().single()
+        : { data: { id: generateLocalUUID(), created_at: new Date().toISOString(), ...payload }, error: null };
+      if (saved.error) throw saved.error;
+      state.inventoryRequests.unshift(saved.data);
+      saveLocalStore();
+      event.target.reset();
+      document.getElementById("inventory-request-card").classList.add("hidden");
+      renderInventory();
+      showToast("Solicitud de reposición enviada");
+    } catch (error) {
+      showToast("Error al enviar solicitud: " + error.message);
+    }
+  });
+
+  document.getElementById("inventory-requests-body").addEventListener("click", async (event) => {
+    if (!event.target.classList.contains("inventory-save-request") || !isOwner()) return;
+    const row = event.target.closest("tr[data-request-id]");
+    const request = state.inventoryRequests.find((item) => String(item.id) === row.dataset.requestId);
+    if (!request) return;
+    const status = row.querySelector(".inventory-request-status").value;
+    const response = row.querySelector(".inventory-response").value.trim();
+    const addStock = row.querySelector(".inventory-add-stock").checked;
+    const payload = {
+      estado: status,
+      respuesta_gerencia: response,
+      autor_respuesta: ownerDisplayName(),
+      fecha_respuesta: new Date().toISOString()
+    };
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabaseClient.from("solicitudes_inventario").update(payload).eq("id", request.id);
+        if (error) throw error;
+      }
+      Object.assign(request, payload);
+      if (status === "Comprado" && addStock && !request.stock_sumado) {
+        const material = state.inventory.find((item) => String(item.id) === String(request.material_id));
+        if (material) {
+          await saveInventoryMaterialStock(material, (Number(material.stock_actual) || 0) + Number(request.cantidad_requerida));
+          request.stock_sumado = true;
+          if (isSupabaseConfigured) {
+            const { error } = await supabaseClient.from("solicitudes_inventario").update({ stock_sumado: true }).eq("id", request.id);
+            if (error) throw error;
+          }
+        }
+      }
+      saveLocalStore();
+      renderInventory();
+      showToast("Solicitud actualizada");
+    } catch (error) {
+      showToast("Error al actualizar solicitud: " + error.message);
+    }
+  });
+
+  // ==================== 6. USUARIOS ====================
   function renderUsersTable() {
     const tbody = document.getElementById("users-table-body");
     if (!state.users.length) {

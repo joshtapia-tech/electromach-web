@@ -67,6 +67,7 @@
             <button type="button" class="nav-btn" data-nav="orders">Órdenes técnicas</button>
             <button type="button" class="nav-btn" data-nav="customers">Clientes</button>
             <button type="button" class="nav-btn" data-nav="products">Productos</button>
+            <button type="button" class="nav-btn" data-nav="inventory">Inventario</button>
             <button type="button" class="nav-btn" data-nav="users">Usuarios</button>
             <button type="button" class="nav-btn" data-nav="settings">Configuración</button>
           </nav>
@@ -516,6 +517,79 @@
             <tbody id="products-table-body">
               <tr><td colspan="3" class="empty-state">Cargando productos...</td></tr>
             </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 5. INVENTARIO ==================== -->
+      <section id="view-inventory" class="app-view hidden">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Inventario</h2>
+            <p class="inventory-subtitle">Materiales disponibles, alertas y solicitudes de reposición.</p>
+          </div>
+          <div class="header-actions">
+            <button type="button" id="btn-new-inventory-request" class="btn btn-primary">Pedir reposición</button>
+          </div>
+        </div>
+
+        <div id="inventory-owner-material-card" class="card hidden">
+          <h3 class="card-title">NUEVO MATERIAL</h3>
+          <form id="inventory-material-form">
+            <div class="form-row-3 form-group">
+              <div><label for="im-codigo">Código *</label><input id="im-codigo" required placeholder="MAT-001"></div>
+              <div><label for="im-nombre">Material *</label><input id="im-nombre" required placeholder="Cable THHN  escuadra"></div>
+              <div><label for="im-categoria">Categoría</label><input id="im-categoria" placeholder="Electricidad"></div>
+            </div>
+            <div class="form-row-3 form-group">
+              <div><label for="im-stock">Stock actual</label><input id="im-stock" type="number" min="0" step="1" value="0"></div>
+              <div><label for="im-minimo">Stock mínimo</label><input id="im-minimo" type="number" min="0" step="1" value="0"></div>
+              <div><label for="im-unidad">Unidad</label><input id="im-unidad" placeholder="unidades"></div>
+            </div>
+            <button type="submit" class="btn btn-primary">Agregar material</button>
+          </form>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="inventory-search" class="search-input" placeholder="Buscar por código, material o categoría">
+          <select id="inventory-stock-filter" class="status-select">
+            <option value="">Todos</option>
+            <option value="low">Stock bajo o agotado</option>
+          </select>
+          <button type="button" id="inventory-filter-btn" class="btn btn-dark">Filtrar</button>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table inventory-table">
+            <thead><tr><th>Código</th><th>Material</th><th>Categoría</th><th>Stock actual</th><th>Stock mínimo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="inventory-table-body"><tr><td colspan="7" class="empty-state">Cargando inventario...</td></tr></tbody>
+          </table>
+        </div>
+
+        <div id="inventory-request-card" class="card hidden">
+          <h3 class="card-title">PEDIR REPOSICIÓN</h3>
+          <form id="inventory-request-form">
+            <div class="form-row-2 form-group">
+              <div><label for="ir-material">Material</label><select id="ir-material"></select></div>
+              <div><label for="ir-manual-material">Material nuevo (opcional)</label><input id="ir-manual-material" placeholder="Escribe si no está en el inventario"></div>
+            </div>
+            <div class="form-row-3 form-group">
+              <div><label for="ir-quantity">Cantidad requerida</label><input id="ir-quantity" type="number" min="1" step="1" required></div>
+              <div><label for="ir-urgency">Urgencia</label><select id="ir-urgency"><option value="Normal">Normal</option><option value="Urgente">Urgente</option></select></div>
+              <div><label for="ir-reason">Motivo u obra</label><input id="ir-reason" required placeholder="Obra, instalación o motivo"></div>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button type="submit" class="btn btn-primary">Enviar pedido</button>
+              <button type="button" id="btn-cancel-inventory-request" class="btn btn-secondary">Cancelar</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="page-header inventory-requests-heading"><h2 class="page-title">Solicitudes de stock</h2></div>
+        <div class="table-card">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Solicitante</th><th>Material</th><th>Cantidad</th><th>Urgencia</th><th>Motivo</th><th>Estado</th><th>Respuesta</th><th>Acciones</th></tr></thead>
+            <tbody id="inventory-requests-body"><tr><td colspan="9" class="empty-state">Cargando solicitudes...</td></tr></tbody>
           </table>
         </div>
       </section>
