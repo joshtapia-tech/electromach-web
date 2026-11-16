@@ -9,5 +9,5 @@
 
 window.ELECTROMACH_CONFIG = {
   SUPABASE_URL: "https://qrfohtzbpkekhorfhvv.supabase.co",
-  SUPABASE_ANON_KEY: "sb_publishable_g9opiHHKNrW2zpR06QQi1w_rpJ_1UN-"
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFyZm9odHp0YnBrZWtob3JmaHZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ3ODc0NTMsImV4cCI6MjExMDM2MzQ1M30.D-YmUMyn1d0FFFL2IpLhQpobg483-CkBy9yabFeyd0E"
 };
