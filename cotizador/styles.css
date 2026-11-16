@@ -10,11 +10,11 @@
   --ink-primary: #111827;
   --ink-secondary: #4b5563;
   --ink-muted: #6b7280;
-  --brand-yellow: #facc15;
-  --brand-yellow-bright: #fde047;
-  --brand-yellow-hover: #eab308;
-  --brand-yellow-soft: #fef9c3;
-  --brand-yellow-tint: #fefce8;
+  --brand-yellow: #ffe600;
+  --brand-yellow-bright: #ffef4d;
+  --brand-yellow-hover: #f2d600;
+  --brand-yellow-soft: #fff9c2;
+  --brand-yellow-tint: #fffde6;
   --border-color: #e5e7eb;
   --border-strong: #d1d5db;
   --danger: #dc2626;
@@ -134,7 +134,7 @@ body {
 }
 
 .brand-logo-link img {
-  height: 54px;
+  height: 78px;
   width: auto;
   object-fit: contain;
 }
@@ -631,7 +631,7 @@ table.data-table tbody tr:hover {
 }
 
 .doc-logo img {
-  max-height: 92px;
+  max-height: 125px;
   width: auto;
   object-fit: contain;
 }
