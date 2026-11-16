@@ -165,8 +165,8 @@ body {
 }
 
 .nav-btn.active {
-  background: var(--brand-yellow-soft);
-  color: #92400e;
+  background: var(--brand-yellow);
+  color: var(--ink-primary);
   font-weight: 700;
 }
 
