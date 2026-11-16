@@ -134,7 +134,7 @@ body {
 }
 
 .brand-logo-link img {
-  height: 36px;
+  height: 54px;
   width: auto;
   object-fit: contain;
 }
@@ -631,7 +631,7 @@ table.data-table tbody tr:hover {
 }
 
 .doc-logo img {
-  max-height: 64px;
+  max-height: 92px;
   width: auto;
   object-fit: contain;
 }
