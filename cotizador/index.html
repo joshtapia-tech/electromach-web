@@ -69,6 +69,7 @@
             <button type="button" class="nav-btn" data-nav="products">Productos</button>
             <button type="button" class="nav-btn" data-nav="inventory">Inventario</button>
             <button type="button" class="nav-btn" data-nav="users">Usuarios</button>
+            <button type="button" id="nav-compras-ventas" class="nav-btn hidden" data-nav="compras-ventas">Compras y Ventas</button>
             <button type="button" class="nav-btn" data-nav="settings">Configuración</button>
           </nav>
         </div>
@@ -643,6 +644,126 @@
         </div>
       </section>
 
+      <!-- ==================== 6. COMPRAS Y VENTAS ==================== -->
+      <section id="view-compras-ventas" class="app-view hidden">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Compras y Ventas</h2>
+            <p class="inventory-subtitle">Registra movimientos contables y conserva sus respaldos.</p>
+          </div>
+          <div class="header-actions">
+            <button type="button" id="cv-export-btn" class="btn btn-dark">Exportar CSV / Excel</button>
+          </div>
+        </div>
+
+        <div class="financial-summary-grid">
+          <div class="financial-summary-card financial-sales">
+            <span>Total Ventas</span>
+            <strong id="cv-total-ventas">$0</strong>
+          </div>
+          <div class="financial-summary-card financial-purchases">
+            <span>Total Compras</span>
+            <strong id="cv-total-compras">$0</strong>
+          </div>
+          <div class="financial-summary-card financial-balance">
+            <span>Balance Neto</span>
+            <strong id="cv-balance-neto">$0</strong>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">REGISTRAR MOVIMIENTO</h3>
+          <form id="cv-form">
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="cv-tipo">Tipo de operación *</label>
+                <select id="cv-tipo" required>
+                  <option value="Venta">Venta</option>
+                  <option value="Compra">Compra</option>
+                </select>
+              </div>
+              <div>
+                <label for="cv-documento">Tipo de documento *</label>
+                <select id="cv-documento" required>
+                  <option value="Factura">Factura</option>
+                  <option value="Boleta">Boleta</option>
+                  <option value="Comprobante">Comprobante</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label for="cv-numero-documento">N° de documento *</label>
+                <input type="text" id="cv-numero-documento" required placeholder="Ej: 12345" />
+              </div>
+            </div>
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="cv-fecha">Fecha *</label>
+                <input type="date" id="cv-fecha" required />
+              </div>
+              <div>
+                <label for="cv-tercero">Cliente o Proveedor *</label>
+                <input type="text" id="cv-tercero" required placeholder="Empresa o persona" />
+              </div>
+              <div>
+                <label for="cv-monto-total">Monto total *</label>
+                <input type="number" id="cv-monto-total" min="0" step="1" required placeholder="0" />
+              </div>
+            </div>
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="cv-neto">Neto (opcional)</label>
+                <input type="number" id="cv-neto" min="0" step="1" placeholder="0" />
+              </div>
+              <div>
+                <label for="cv-iva">IVA (opcional)</label>
+                <input type="number" id="cv-iva" min="0" step="1" placeholder="0" />
+              </div>
+              <div>
+                <label for="cv-adjunto">Adjunto / Foto</label>
+                <input type="file" id="cv-adjunto" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" capture="environment" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="cv-detalle">Descripción / Detalle *</label>
+              <textarea id="cv-detalle" rows="3" required placeholder="Detalle de la compra o venta"></textarea>
+            </div>
+            <button type="submit" id="cv-submit-btn" class="btn btn-primary">Guardar movimiento</button>
+          </form>
+        </div>
+
+        <div class="filter-bar">
+          <select id="cv-type-filter" class="status-select">
+            <option value="">Todos</option>
+            <option value="Compra">Compras</option>
+            <option value="Venta">Ventas</option>
+          </select>
+          <input type="month" id="cv-month-filter" class="status-select" />
+          <input type="text" id="cv-search" class="search-input" placeholder="Buscar cliente/proveedor o N° documento" />
+          <button type="button" id="cv-clear-filters" class="btn btn-secondary">Limpiar filtros</button>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table cv-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Documento</th>
+                <th>Cliente / Proveedor</th>
+                <th>Detalle</th>
+                <th class="text-right">Total</th>
+                <th>Respaldo</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="cv-table-body">
+              <tr><td colspan="8" class="empty-state">Cargando movimientos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ==================== 6. CONFIGURACIÓN ==================== -->
       <section id="view-settings" class="app-view hidden">
         <div class="page-header">
@@ -730,6 +851,15 @@
   </div>
 
   <div id="toast" class="toast hidden"></div>
+  <div id="cv-file-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="cv-modal-title">
+    <div class="file-modal">
+      <div class="file-modal-header">
+        <h3 id="cv-modal-title">Respaldo del movimiento</h3>
+        <button type="button" id="cv-modal-close" class="modal-close" aria-label="Cerrar">×</button>
+      </div>
+      <div id="cv-modal-content" class="file-modal-content"></div>
+    </div>
+  </div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

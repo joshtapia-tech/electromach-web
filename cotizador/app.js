@@ -47,6 +47,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
     users: [],
     inventory: [],
     inventoryRequests: [],
+    comprasVentas: [],
     activeQuoteId: null,
     activeOrderId: null
   };
@@ -120,6 +121,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
         state.users = parsed.users || [];
         state.inventory = parsed.inventory || [];
         state.inventoryRequests = parsed.inventoryRequests || [];
+        state.comprasVentas = parsed.comprasVentas || [];
         return;
       }
     } catch (e) {
@@ -149,7 +151,8 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
         orders: state.orders,
         users: state.users,
         inventory: state.inventory,
-        inventoryRequests: state.inventoryRequests
+        inventoryRequests: state.inventoryRequests,
+        comprasVentas: state.comprasVentas
       })
     );
   }
@@ -245,6 +248,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
     document.getElementById("login-view").classList.add("hidden");
     document.getElementById("app-shell").classList.remove("hidden");
     document.getElementById("current-user-name").textContent = state.user.nombre;
+    document.getElementById("nav-compras-ventas").classList.toggle("hidden", !isOwner());
 
     if (!isSupabaseConfigured) {
       document.getElementById("demo-mode-banner").classList.remove("hidden");
@@ -258,7 +262,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
   }
 
   async function loadAllFromSupabase() {
-    const [setRes, custRes, prodRes, quoteRes, ordRes, profRes, inventoryRes, requestsRes] = await Promise.all([
+    const [setRes, custRes, prodRes, quoteRes, ordRes, profRes, inventoryRes, requestsRes, comprasVentasRes] = await Promise.all([
       supabaseClient.from("settings").select("*").eq("id", 1).maybeSingle(),
       supabaseClient.from("customers").select("*").order("nombre", { ascending: true }),
       supabaseClient.from("products").select("*").order("descripcion", { ascending: true }),
@@ -266,7 +270,10 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
       supabaseClient.from("technical_orders").select("*").order("numero", { ascending: false }),
       supabaseClient.from("profiles").select("*").order("created_at", { ascending: true }),
       supabaseClient.from("inventario_materiales").select("*"),
-      supabaseClient.from("solicitudes_inventario").select("*")
+      supabaseClient.from("solicitudes_inventario").select("*"),
+      isOwner()
+        ? supabaseClient.from("compras_ventas").select("*").order("fecha", { ascending: false }).order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null })
     ]);
 
     if (setRes.data) Object.assign(state.settings, setRes.data);
@@ -277,6 +284,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
     if (profRes.data) state.users = profRes.data;
     if (inventoryRes.data) state.inventory = inventoryRes.data;
     if (requestsRes.data) state.inventoryRequests = requestsRes.data;
+    if (comprasVentasRes.data) state.comprasVentas = comprasVentasRes.data;
 
     // Actualizar nombre mostrado desde perfil si existe
     const me = state.users.find((u) => u.id === state.user.id);
@@ -288,6 +296,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
 
   // ==================== NAVEGACIÓN ENTRE VISTAS ====================
   function switchView(viewName) {
+    if (viewName === "compras-ventas" && !isOwner()) return;
     document.querySelectorAll(".app-view").forEach((el) => el.classList.add("hidden"));
     const target = document.getElementById("view-" + viewName);
     if (target) target.classList.remove("hidden");
@@ -303,6 +312,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
       products: "products",
       users: "users",
       inventory: "inventory",
+      "compras-ventas": "compras-ventas",
       settings: "settings"
     };
     const activeTab = navMap[viewName] || "quotes";
@@ -320,6 +330,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
       if (target === "products") renderProductsTable();
       if (target === "users") renderUsersTable();
       if (target === "inventory") renderInventory();
+      if (target === "compras-ventas" && isOwner()) renderComprasVentas();
       if (target === "settings") fillSettingsForm();
       switchView(target);
     });
@@ -332,6 +343,7 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
     renderProductsTable();
     renderUsersTable();
     renderInventory();
+    renderComprasVentas();
     fillSettingsForm();
     refreshCustomerDropdowns();
     refreshProductDatalist();
@@ -1767,6 +1779,236 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
       renderUsersTable();
       showToast("Usuario eliminado del listado");
     }
+  });
+
+  // ==================== 7. COMPRAS Y VENTAS ====================
+  function getComprasVentasFilters() {
+    return {
+      tipo: document.getElementById("cv-type-filter").value,
+      mes: document.getElementById("cv-month-filter").value,
+      busqueda: document.getElementById("cv-search").value.trim().toLowerCase()
+    };
+  }
+
+  function getFilteredComprasVentas() {
+    const filters = getComprasVentasFilters();
+    return state.comprasVentas.filter((item) => {
+      const matchTipo = !filters.tipo || item.tipo === filters.tipo;
+      const matchMes = !filters.mes || String(item.fecha || "").slice(0, 7) === filters.mes;
+      const searchable = `${item.cliente_proveedor || ""} ${item.numero_documento || ""}`.toLowerCase();
+      return matchTipo && matchMes && (!filters.busqueda || searchable.includes(filters.busqueda));
+    });
+  }
+
+  function renderComprasVentas() {
+    if (!isOwner()) return;
+    const filtered = getFilteredComprasVentas();
+    const totalVentas = filtered
+      .filter((item) => item.tipo === "Venta")
+      .reduce((sum, item) => sum + Number(item.monto_total || 0), 0);
+    const totalCompras = filtered
+      .filter((item) => item.tipo === "Compra")
+      .reduce((sum, item) => sum + Number(item.monto_total || 0), 0);
+
+    document.getElementById("cv-total-ventas").textContent = formatCLP(totalVentas);
+    document.getElementById("cv-total-compras").textContent = formatCLP(totalCompras);
+    document.getElementById("cv-balance-neto").textContent = formatCLP(totalVentas - totalCompras);
+
+    const tbody = document.getElementById("cv-table-body");
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No hay movimientos con estos filtros.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((item) => {
+      const attachment = item.archivo_url
+        ? `<button type="button" class="btn btn-primary btn-sm" data-cv-view="${escapeHTML(item.id)}">Ver archivo / Foto</button>`
+        : '<span class="muted-text">Sin archivo</span>';
+      return `
+        <tr>
+          <td>${formatDateCL(item.fecha)}</td>
+          <td><span class="cv-type-badge cv-type-${item.tipo === "Venta" ? "venta" : "compra"}">${escapeHTML(item.tipo)}</span></td>
+          <td>${escapeHTML(item.tipo_documento || "")} · ${escapeHTML(item.numero_documento || "")}</td>
+          <td>${escapeHTML(item.cliente_proveedor || "")}</td>
+          <td class="cv-detail-cell">${escapeHTML(item.detalle || "")}</td>
+          <td class="text-right font-bold">${formatCLP(item.monto_total)}</td>
+          <td>${attachment}</td>
+          <td><button type="button" class="link-danger" data-cv-delete="${escapeHTML(item.id)}">Eliminar</button></td>
+        </tr>`;
+    }).join("");
+  }
+
+  function safeFileName(name) {
+    return String(name || "archivo")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 100) || "archivo";
+  }
+
+  function storagePathFromPublicUrl(url) {
+    const marker = "/storage/v1/object/public/documentos-contables/";
+    const index = String(url || "").indexOf(marker);
+    return index >= 0 ? decodeURIComponent(String(url).slice(index + marker.length)) : null;
+  }
+
+  async function uploadContableFile(file) {
+    if (!file) return { archivo_url: null, archivo_nombre: null, storage_path: null };
+    if (!isSupabaseConfigured) {
+      showToast("El adjunto solo se puede subir con Supabase configurado.");
+      return { archivo_url: null, archivo_nombre: null, storage_path: null };
+    }
+    const allowed = file.type.startsWith("image/") ||
+      ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"].includes(file.type) ||
+      /\.(doc|docx|xls|xlsx)$/i.test(file.name);
+    if (!allowed) throw new Error("El archivo debe ser una imagen, PDF, Word o Excel.");
+    const path = `movimientos/${state.user.id}/${Date.now()}-${safeFileName(file.name)}`;
+    const { error: uploadError } = await supabaseClient.storage.from("documentos-contables").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false
+    });
+    if (uploadError) throw uploadError;
+    const { data } = supabaseClient.storage.from("documentos-contables").getPublicUrl(path);
+    return { archivo_url: data.publicUrl, archivo_nombre: file.name, storage_path: path };
+  }
+
+  function resetComprasVentasForm() {
+    document.getElementById("cv-form").reset();
+    document.getElementById("cv-fecha").value = todayISO();
+  }
+
+  document.getElementById("cv-fecha").value = todayISO();
+  document.getElementById("cv-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!isOwner()) return;
+    const submit = document.getElementById("cv-submit-btn");
+    submit.disabled = true;
+    let uploadedPath = null;
+    try {
+      const file = document.getElementById("cv-adjunto").files[0] || null;
+      const attachment = await uploadContableFile(file);
+      uploadedPath = attachment.storage_path;
+      const payload = {
+        tipo: document.getElementById("cv-tipo").value,
+        tipo_documento: document.getElementById("cv-documento").value,
+        numero_documento: document.getElementById("cv-numero-documento").value.trim(),
+        fecha: document.getElementById("cv-fecha").value || todayISO(),
+        cliente_proveedor: document.getElementById("cv-tercero").value.trim(),
+        detalle: document.getElementById("cv-detalle").value.trim(),
+        monto_total: Number(document.getElementById("cv-monto-total").value) || 0,
+        neto: Number(document.getElementById("cv-neto").value) || 0,
+        iva: Number(document.getElementById("cv-iva").value) || 0,
+        archivo_url: attachment.archivo_url,
+        archivo_nombre: attachment.archivo_nombre
+      };
+
+      let saved;
+      if (isSupabaseConfigured) {
+        saved = await supabaseClient.from("compras_ventas").insert(payload).select().single();
+        if (saved.error) throw saved.error;
+      } else {
+        saved = { data: { id: generateLocalUUID(), created_at: new Date().toISOString(), ...payload }, error: null };
+      }
+      state.comprasVentas.unshift(saved.data);
+      saveLocalStore();
+      resetComprasVentasForm();
+      renderComprasVentas();
+      showToast("Movimiento guardado correctamente");
+    } catch (error) {
+      if (uploadedPath && isSupabaseConfigured) {
+        await supabaseClient.storage.from("documentos-contables").remove([uploadedPath]);
+      }
+      showToast("Error al guardar movimiento: " + error.message);
+    } finally {
+      submit.disabled = false;
+    }
+  });
+
+  ["cv-type-filter", "cv-month-filter"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", renderComprasVentas);
+  });
+  document.getElementById("cv-search").addEventListener("input", renderComprasVentas);
+  document.getElementById("cv-clear-filters").addEventListener("click", () => {
+    document.getElementById("cv-type-filter").value = "";
+    document.getElementById("cv-month-filter").value = "";
+    document.getElementById("cv-search").value = "";
+    renderComprasVentas();
+  });
+
+  function openContableFile(item) {
+    const modal = document.getElementById("cv-file-modal");
+    const content = document.getElementById("cv-modal-content");
+    document.getElementById("cv-modal-title").textContent = item.archivo_nombre || "Respaldo del movimiento";
+    const url = escapeHTML(item.archivo_url);
+    const isImage = /\.(png|jpe?g|gif|webp|bmp|heic)(\?|$)/i.test(item.archivo_url || "");
+    const isPdf = /\.pdf(\?|$)/i.test(item.archivo_url || "");
+    content.innerHTML = isImage
+      ? `<img class="file-preview-image" src="${url}" alt="${escapeHTML(item.archivo_nombre || "Adjunto")}" />`
+      : isPdf
+        ? `<iframe class="file-preview-frame" src="${url}" title="${escapeHTML(item.archivo_nombre || "PDF")}"></iframe>`
+        : `<p>Este tipo de archivo no tiene vista previa.</p>`;
+    content.insertAdjacentHTML("beforeend", `<a class="btn btn-primary" href="${url}" target="_blank" rel="noopener" download>Descargar archivo</a>`);
+    modal.classList.remove("hidden");
+  }
+
+  function closeContableFile() {
+    document.getElementById("cv-file-modal").classList.add("hidden");
+    document.getElementById("cv-modal-content").innerHTML = "";
+  }
+
+  document.getElementById("cv-modal-close").addEventListener("click", closeContableFile);
+  document.getElementById("cv-file-modal").addEventListener("click", (event) => {
+    if (event.target.id === "cv-file-modal") closeContableFile();
+  });
+  document.getElementById("cv-table-body").addEventListener("click", async (event) => {
+    const viewId = event.target.dataset.cvView;
+    const deleteId = event.target.dataset.cvDelete;
+    if (viewId) {
+      const item = state.comprasVentas.find((entry) => entry.id === viewId);
+      if (item) openContableFile(item);
+      return;
+    }
+    if (!deleteId) return;
+    const item = state.comprasVentas.find((entry) => entry.id === deleteId);
+    if (!item || !confirm(`¿Eliminar el movimiento ${item.numero_documento || ""}?`)) return;
+    try {
+      if (isSupabaseConfigured) {
+        const path = storagePathFromPublicUrl(item.archivo_url);
+        if (path) {
+          const { error: storageError } = await supabaseClient.storage.from("documentos-contables").remove([path]);
+          if (storageError) throw storageError;
+        }
+        const { error } = await supabaseClient.from("compras_ventas").delete().eq("id", deleteId);
+        if (error) throw error;
+      }
+      state.comprasVentas = state.comprasVentas.filter((entry) => entry.id !== deleteId);
+      saveLocalStore();
+      renderComprasVentas();
+      showToast("Movimiento eliminado");
+    } catch (error) {
+      showToast("Error al eliminar movimiento: " + error.message);
+    }
+  });
+
+  document.getElementById("cv-export-btn").addEventListener("click", () => {
+    const rows = getFilteredComprasVentas();
+    const headers = ["Fecha", "Tipo", "Documento", "N° documento", "Cliente/Proveedor", "Detalle", "Neto", "IVA", "Monto total", "Archivo"];
+    const csvEscape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = "\uFEFF" + [
+      headers,
+      ...rows.map((item) => [
+        item.fecha, item.tipo, item.tipo_documento, item.numero_documento, item.cliente_proveedor,
+        item.detalle, item.neto, item.iva, item.monto_total, item.archivo_nombre
+      ])
+    ].map((row) => row.map(csvEscape).join(";")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `compras-ventas-${todayISO()}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   });
 
   // ==================== 6. CONFIGURACIÓN ====================
