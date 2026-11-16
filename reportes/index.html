@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Bitácoras diarias · Electromach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div id="login-view" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="../brand-logo.png" alt="Electromach">
+        <h1>Bitácoras diarias</h1>
+        <p>Acceso interno · Energía e industria</p>
+      </div>
+      <div id="login-error" class="alert error hidden" role="alert"></div>
+      <form id="login-form">
+        <label for="login-email">Correo</label>
+        <input id="login-email" type="email" placeholder="nombre@electromach.cl" autocomplete="email" required>
+        <label for="login-password">Contraseña</label>
+        <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+        <button id="login-submit" class="button button-primary" type="submit">Ingresar</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-shell" class="hidden">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <a class="brand-link" href="../cotizador/" aria-label="Ir a Cotizaciones">
+          <img src="../brand-logo.png" alt="Electromach">
+        </a>
+        <nav class="main-nav" aria-label="Navegación principal">
+          <a href="../cotizador/">Cotizaciones</a>
+          <a class="active" href="./">Reportes</a>
+        </nav>
+        <div class="topbar-actions">
+          <span id="current-user" class="user-badge"></span>
+          <button id="logout-btn" class="button button-secondary" type="button">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-container">
+      <div class="page-heading">
+        <div>
+          <p class="eyebrow">ELECTROMACH · OPERACIÓN DIARIA</p>
+          <h1>Bitácoras diarias</h1>
+          <p id="role-description" class="muted"></p>
+        </div>
+        <button id="refresh-btn" class="button button-secondary" type="button">Actualizar</button>
+      </div>
+
+      <section id="worker-form-section" class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">NUEVA BITÁCORA</p>
+            <h2>Registra tu jornada</h2>
+          </div>
+        </div>
+        <div id="form-message" class="alert hidden" role="status"></div>
+        <form id="report-form" class="report-form">
+          <div class="form-grid form-grid-4">
+            <div class="field"><label for="report-date">Fecha</label><input id="report-date" type="date" required></div>
+            <div class="field"><label for="worker-name">Nombre del trabajador</label><input id="worker-name" type="text" required></div>
+            <div class="field"><label for="start-time">Hora de entrada</label><input id="start-time" type="time" required></div>
+            <div class="field"><label for="end-time">Hora de salida</label><input id="end-time" type="time" required></div>
+          </div>
+          <div class="form-grid form-grid-2">
+            <div class="field"><label for="activities">¿Qué hiciste hoy?</label><textarea id="activities" rows="5" required></textarea></div>
+            <div class="field"><label for="pending">¿Qué no pudiste hacer / Pendientes?</label><textarea id="pending" rows="5" placeholder="Indica si quedó algo pendiente"></textarea></div>
+          </div>
+          <div class="form-actions"><button class="button button-primary" type="submit">Enviar bitácora</button></div>
+        </form>
+      </section>
+
+      <section class="history-section">
+        <div class="panel-heading history-heading">
+          <div>
+            <p class="eyebrow">HISTORIAL</p>
+            <h2>Reportes registrados</h2>
+          </div>
+          <div id="owner-filters" class="filters hidden">
+            <input id="filter-worker" type="search" placeholder="Filtrar por trabajador">
+            <input id="filter-date" type="date" aria-label="Filtrar por fecha">
+            <button id="clear-filters" class="button button-secondary" type="button">Limpiar</button>
+          </div>
+        </div>
+        <div id="history-message" class="alert hidden" role="status"></div>
+        <div id="reports-list" class="reports-list"><div class="empty-state">Cargando reportes...</div></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="../cotizador/config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
