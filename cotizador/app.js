@@ -1907,6 +1907,12 @@ const DUENOS_EMAILS = ['gustavo@electromach.cl', 'matias@electromach.cl'];
       let saved;
       if (isSupabaseConfigured) {
         saved = await supabaseClient.from("compras_ventas").insert(payload).select().single();
+        if (saved.error && /schema cache|column .*neto|column .*iva/i.test(saved.error.message || "")) {
+          const compatiblePayload = { ...payload };
+          delete compatiblePayload.neto;
+          delete compatiblePayload.iva;
+          saved = await supabaseClient.from("compras_ventas").insert(compatiblePayload).select().single();
+        }
         if (saved.error) throw saved.error;
       } else {
         saved = { data: { id: generateLocalUUID(), created_at: new Date().toISOString(), ...payload }, error: null };
