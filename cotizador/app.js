@@ -33,12 +33,9 @@
       proximo_num_cotizacion: 1001,
       proximo_num_orden: 501,
       forma_pago: "Transferencia electrónica / Orden de compra",
-      metodos_pago: "Transferencia bancaria
-Correo comprobante: contacto@electromach.cl",
+      metodos_pago: "Transferencia bancaria\nCorreo comprobante: contacto@electromach.cl",
       terminos_condiciones:
-        "• Los precios unitarios son NETOS; el IVA (19%) se calcula sobre el total neto.
-• Cotización válida hasta la fecha de vencimiento indicada.
-• Instalaciones eléctricas certificadas bajo normativa SEC.",
+        "• Los precios unitarios son NETOS; el IVA (19%) se calcula sobre el total neto.\n• Cotización válida hasta la fecha de vencimiento indicada.\n• Instalaciones eléctricas certificadas bajo normativa SEC.",
       mensaje_final: "¡GRACIAS POR CONFIAR EN ELECTROMACH!"
     },
     customers: [],
