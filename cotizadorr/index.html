@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Cotizador · Electromach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ==================== VISTA 0: LOGIN ==================== -->
+  <div id="login-view" class="login-wrapper">
+    <div class="login-card">
+      <div class="login-brand">
+        <img
+          src="../brand-logo.png"
+          alt="Electromach"
+          onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 260 64%22><rect width=%22260%22 height=%2264%22 rx=%2210%22 fill=%22%23111827%22/><polygon points=%2236,12 20,36 33,36 28,52 46,28 33,28%22 fill=%22%23FACC15%22/><text x=%2260%22 y=%2239%22 fill=%22%23FFFFFF%22 font-family=%22Arial,sans-serif%22 font-weight=%22800%22 font-size=%2222%22>ELECTROMACH</text></svg>';"
+        />
+        <h1 class="login-title">Cotizador</h1>
+        <p class="login-subtitle">Acceso interno · Energía e industria</p>
+      </div>
+
+      <div id="login-config-warning" class="alert-banner alert-warning hidden">
+        <strong>Configuración Supabase pendiente:</strong> Aún no has pegado tu URL y Anon Key en <code>cotizador/config.js</code>. Puedes ingresar en <strong>Modo Vista Previa Local</strong> con cualquier correo y clave para probar el sistema.
+      </div>
+
+      <div id="login-error" class="alert-banner alert-error hidden"></div>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="login-email">Correo</label>
+          <input type="email" id="login-email" placeholder="nombre@electromach.cl" required autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Contraseña</label>
+          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <div style="margin-top: 18px;">
+          <button type="submit" id="login-submit-btn" class="btn btn-primary btn-block">Ingresar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== APLICACIÓN INTERNA ==================== -->
+  <div id="app-shell" class="hidden">
+    <!-- Barra superior -->
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="topbar-left">
+          <a class="brand-logo-link" data-nav="quotes">
+            <img
+              src="../brand-logo.png"
+              alt="Electromach"
+              onerror="this.onerror=null;this.src='data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 240 54%22><rect width=%22240%22 height=%2254%22 rx=%228%22 fill=%22%23111827%22/><polygon points=%2230,9 16,30 27,30 23,45 38,24 27,24%22 fill=%22%23FACC15%22/><text x=%2250%22 y=%2234%22 fill=%22%23FFFFFF%22 font-family=%22Arial,sans-serif%22 font-weight=%22800%22 font-size=%2220%22>ELECTROMACH</text></svg>';"
+            />
+          </a>
+          <nav class="nav-links" aria-label="Navegación principal">
+            <button type="button" class="nav-btn active" data-nav="quotes">Cotizaciones</button>
+            <button type="button" class="nav-btn" data-nav="orders">Órdenes técnicas</button>
+            <button type="button" class="nav-btn" data-nav="customers">Clientes</button>
+            <button type="button" class="nav-btn" data-nav="products">Productos</button>
+            <button type="button" class="nav-btn" data-nav="users">Usuarios</button>
+            <button type="button" class="nav-btn" data-nav="settings">Configuración</button>
+          </nav>
+        </div>
+        <div class="topbar-right">
+          <span id="current-user-name" class="user-badge">Usuario</span>
+          <button type="button" id="logout-btn" class="btn btn-secondary btn-sm">Salir</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-container">
+      <div id="demo-mode-banner" class="alert-banner alert-warning hidden">
+        <strong>Modo Vista Previa Local:</strong> Estás operando sin conexión a Supabase. Configura <code>cotizador/config.js</code> para sincronizar en la nube con todo tu equipo.
+      </div>
+
+      <!-- ==================== 1. COTIZACIONES (LISTADO) ==================== -->
+      <section id="view-quotes" class="app-view">
+        <div class="page-header">
+          <h2 class="page-title">Cotizaciones</h2>
+          <div class="header-actions">
+            <button type="button" id="btn-new-quote" class="btn btn-primary">+ Nueva cotización</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="quotes-search" class="search-input" placeholder="Buscar por cliente, RUT o número" />
+          <select id="quotes-status-filter" class="status-select">
+            <option value="">Todos los estados</option>
+            <option value="Borrador">Borrador</option>
+            <option value="Enviada">Enviada</option>
+            <option value="Aprobada">Aprobada</option>
+            <option value="Rechazada">Rechazada</option>
+          </select>
+          <button type="button" id="quotes-filter-btn" class="btn btn-dark">Filtrar</button>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th class="text-right">Neto</th>
+                <th class="text-right">Total</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="quotes-table-body">
+              <tr><td colspan="7" class="empty-state">Cargando cotizaciones...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 1B. FORMULARIO COTIZACIÓN ==================== -->
+      <section id="view-quote-form" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title" id="quote-form-title">Nueva cotización (N° 1001)</h2>
+          <div class="header-actions">
+            <button type="button" id="btn-cancel-quote" class="btn btn-secondary">Cancelar</button>
+            <button type="button" id="btn-save-quote" class="btn btn-primary">Guardar y ver</button>
+          </div>
+        </div>
+
+        <form id="quote-form">
+          <input type="hidden" id="qf-id" />
+          <input type="hidden" id="qf-numero" />
+
+          <div class="grid-2">
+            <!-- Cliente -->
+            <div class="card">
+              <h3 class="card-title">CLIENTE</h3>
+              <div class="form-group">
+                <label for="qf-saved-customer">Elegir cliente guardado</label>
+                <select id="qf-saved-customer">
+                  <option value="">— Escribir datos manualmente —</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="qf-cliente-nombre">Empresa / Cliente *</label>
+                <input type="text" id="qf-cliente-nombre" required placeholder="Nombre empresa o cliente" />
+              </div>
+              <div class="form-row-2 form-group">
+                <div>
+                  <label for="qf-cliente-rut">RUT</label>
+                  <input type="text" id="qf-cliente-rut" placeholder="76.123.456-7" />
+                </div>
+                <div>
+                  <label for="qf-cliente-telefono">Teléfono</label>
+                  <input type="text" id="qf-cliente-telefono" placeholder="+56 9 1234 5678" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="qf-cliente-correo">Correo</label>
+                <input type="email" id="qf-cliente-correo" placeholder="cliente@empresa.cl" />
+              </div>
+              <div class="form-group">
+                <label for="qf-cliente-direccion">Dirección</label>
+                <input type="text" id="qf-cliente-direccion" placeholder="Dirección de obra o facturación" />
+              </div>
+            </div>
+
+            <!-- Datos de la cotización -->
+            <div class="card">
+              <h3 class="card-title">DATOS DE LA COTIZACIÓN</h3>
+              <div class="form-row-2 form-group">
+                <div>
+                  <label for="qf-fecha">Fecha</label>
+                  <input type="date" id="qf-fecha" required />
+                </div>
+                <div>
+                  <label for="qf-validez">Validez (días)</label>
+                  <input type="number" id="qf-validez" min="1" value="10" required />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="qf-forma-pago">Forma de pago</label>
+                <input type="text" id="qf-forma-pago" placeholder="Transferencia / Orden de compra" />
+              </div>
+              <div class="form-group">
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="qf-aplicar-descuento" />
+                  <span>Aplicar descuento</span>
+                </label>
+              </div>
+              <div id="qf-descuento-group" class="form-group hidden">
+                <label for="qf-descuento-pct">Porcentaje de descuento (%)</label>
+                <input type="number" id="qf-descuento-pct" min="0" max="100" step="0.1" value="0" />
+              </div>
+              <div class="form-row-2 form-group">
+                <div>
+                  <label for="qf-iva">IVA (%)</label>
+                  <input type="number" id="qf-iva" min="0" max="100" step="0.1" value="19" required />
+                </div>
+                <div>
+                  <label for="qf-estado">Estado</label>
+                  <select id="qf-estado">
+                    <option value="Borrador">Borrador</option>
+                    <option value="Enviada">Enviada</option>
+                    <option value="Aprobada">Aprobada</option>
+                    <option value="Rechazada">Rechazada</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Ítems -->
+          <div class="card">
+            <h3 class="card-title">ÍTEMS <small>(precio unitario NETO, sin IVA)</small></h3>
+            <datalist id="products-datalist"></datalist>
+            <div class="items-editor-wrap">
+              <div class="items-editor-head">
+                <div>Descripción</div>
+                <div>Cant.</div>
+                <div>Precio unit. neto</div>
+                <div class="text-right">Total neto</div>
+                <div></div>
+              </div>
+              <div id="quote-items-container"></div>
+            </div>
+            <button type="button" id="btn-add-quote-item" class="btn btn-secondary btn-sm">+ Agregar ítem</button>
+          </div>
+
+          <!-- Observaciones y Resumen -->
+          <div class="grid-2">
+            <div class="card">
+              <h3 class="card-title">OBSERVACIONES</h3>
+              <textarea id="qf-observaciones" rows="5" placeholder="Notas técnicas, plazos de entrega o alcances del servicio..."></textarea>
+            </div>
+
+            <div class="card">
+              <h3 class="card-title">RESUMEN</h3>
+              <div class="summary-box">
+                <div class="summary-line">
+                  <span>Subtotal neto</span>
+                  <strong id="sum-subtotal">$0</strong>
+                </div>
+                <div id="sum-discount-row" class="summary-line hidden">
+                  <span>Descuento (<span id="sum-discount-pct-label">0</span>%)</span>
+                  <strong id="sum-discount">-$0</strong>
+                </div>
+                <div class="summary-line">
+                  <span>Total neto</span>
+                  <strong id="sum-neto">$0</strong>
+                </div>
+                <div class="summary-line">
+                  <span>IVA (<span id="sum-iva-label">19</span>%)</span>
+                  <strong id="sum-iva">$0</strong>
+                </div>
+                <div class="summary-total-bar">
+                  <span>TOTAL (con IVA)</span>
+                  <span id="sum-total">$0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- ==================== 1C. VISTA PREVIA / PDF COTIZACIÓN ==================== -->
+      <section id="view-quote-preview" class="app-view hidden">
+        <div class="print-toolbar">
+          <button type="button" id="btn-preview-back" class="btn btn-secondary">← Volver</button>
+          <button type="button" id="btn-preview-edit" class="btn btn-secondary">Editar</button>
+          <button type="button" id="btn-preview-print" class="btn btn-primary">Descargar PDF / Imprimir</button>
+          <span class="print-hint">En la ventana de impresión elija «Guardar como PDF».</span>
+        </div>
+
+        <div id="quote-print-document" class="doc-sheet"></div>
+      </section>
+
+      <!-- ==================== 2. ÓRDENES TÉCNICAS (LISTADO) ==================== -->
+      <section id="view-orders" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title">Órdenes técnicas</h2>
+          <div class="header-actions">
+            <button type="button" id="btn-new-order" class="btn btn-primary">+ Nueva orden técnica</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="orders-search" class="search-input" placeholder="Buscar por cliente, teléfono, servicio o número" />
+          <select id="orders-status-filter" class="status-select">
+            <option value="">Todos los estados</option>
+            <option value="Realizada">Realizada</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="En proceso">En proceso</option>
+            <option value="Cancelada">Cancelada</option>
+          </select>
+          <button type="button" id="orders-filter-btn" class="btn btn-dark">Filtrar</button>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>N°</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Servicio</th>
+                <th class="text-right">Valor visita</th>
+                <th>Recibido por</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="orders-table-body">
+              <tr><td colspan="8" class="empty-state">No hay órdenes técnicas todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 2B. FORMULARIO ORDEN TÉCNICA ==================== -->
+      <section id="view-order-form" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title" id="order-form-title">Nueva orden técnica (N° 501)</h2>
+          <div class="header-actions">
+            <button type="button" id="btn-cancel-order" class="btn btn-secondary">Cancelar</button>
+            <button type="button" id="btn-save-order" class="btn btn-primary">Guardar y ver</button>
+          </div>
+        </div>
+
+        <form id="order-form">
+          <input type="hidden" id="of-id" />
+          <input type="hidden" id="of-numero" />
+
+          <div class="card">
+            <h3 class="card-title">CLIENTE</h3>
+            <div class="form-group">
+              <label for="of-saved-customer">Elegir cliente guardado</label>
+              <select id="of-saved-customer">
+                <option value="">— Escribir datos manualmente —</option>
+              </select>
+            </div>
+            <div class="form-row-2 form-group">
+              <div>
+                <label for="of-cliente-nombre">Nombre y apellido *</label>
+                <input type="text" id="of-cliente-nombre" required placeholder="Nombre del cliente o contacto" />
+              </div>
+              <div>
+                <label for="of-cliente-telefono">Teléfono de contacto</label>
+                <input type="text" id="of-cliente-telefono" placeholder="+56 9 1234 5678" />
+              </div>
+            </div>
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="of-recibido-por">Recibido por</label>
+                <input type="text" id="of-recibido-por" placeholder="Nombre quien recibe en terreno" />
+              </div>
+              <div>
+                <label for="of-valor-visita">Valor visita</label>
+                <input type="number" id="of-valor-visita" min="0" step="1" value="0" />
+              </div>
+              <div>
+                <label for="of-fecha">Fecha</label>
+                <input type="date" id="of-fecha" required />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="of-estado">Estado</label>
+              <select id="of-estado">
+                <option value="Realizada">Realizada</option>
+                <option value="Pendiente">Pendiente</option>
+                <option value="En proceso">En proceso</option>
+                <option value="Cancelada">Cancelada</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">DESCRIPCIÓN DEL SERVICIO PRESTADO</h3>
+            <textarea id="of-descripcion" rows="4" placeholder="Ej: Revisión tablero general, cambio de protecciones diferenciales y medición de puesta a tierra"></textarea>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">OBSERVACIONES</h3>
+            <textarea id="of-observaciones" rows="4" placeholder="Ej: Trabajo finalizado conforme y probado con carga. Valor visita e insumos $60.000"></textarea>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end;">
+            <button type="button" id="btn-save-order-bottom" class="btn btn-primary">Guardar y ver</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ==================== 2C. VISTA PREVIA ORDEN TÉCNICA ==================== -->
+      <section id="view-order-preview" class="app-view hidden">
+        <div class="print-toolbar">
+          <button type="button" id="btn-order-preview-back" class="btn btn-secondary">← Volver</button>
+          <button type="button" id="btn-order-preview-edit" class="btn btn-secondary">Editar</button>
+          <button type="button" id="btn-order-preview-print" class="btn btn-primary">Descargar PDF / Imprimir</button>
+          <span class="print-hint">En la ventana de impresión elija «Guardar como PDF».</span>
+        </div>
+        <div id="order-print-document" class="doc-sheet"></div>
+      </section>
+
+      <!-- ==================== 3. CLIENTES ==================== -->
+      <section id="view-customers" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title">Clientes</h2>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title" id="customer-form-heading">NUEVO CLIENTE</h3>
+          <form id="customer-form">
+            <input type="hidden" id="cf-id" />
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="cf-nombre">Nombre / Empresa *</label>
+                <input type="text" id="cf-nombre" required placeholder="Razón social o nombre" />
+              </div>
+              <div>
+                <label for="cf-rut">RUT</label>
+                <input type="text" id="cf-rut" placeholder="76.555.444-3" />
+              </div>
+              <div>
+                <label for="cf-correo">Correo</label>
+                <input type="email" id="cf-correo" placeholder="contacto@cliente.cl" />
+              </div>
+            </div>
+            <div class="form-row-2 form-group">
+              <div>
+                <label for="cf-telefono">Teléfono</label>
+                <input type="text" id="cf-telefono" placeholder="+56 9 0000 0000" />
+              </div>
+              <div>
+                <label for="cf-direccion">Dirección</label>
+                <input type="text" id="cf-direccion" placeholder="Dirección comercial o particular" />
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 14px;">
+              <button type="submit" id="cf-submit-btn" class="btn btn-primary">Agregar cliente</button>
+              <button type="button" id="cf-cancel-edit" class="btn btn-secondary hidden">Cancelar edición</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="customers-search" class="search-input" placeholder="Buscar cliente o RUT" />
+          <button type="button" id="customers-search-btn" class="btn btn-dark">Buscar</button>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>RUT</th>
+                <th>Correo</th>
+                <th>Teléfono</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="customers-table-body">
+              <tr><td colspan="5" class="empty-state">Cargando clientes...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 4. PRODUCTOS Y SERVICIOS ==================== -->
+      <section id="view-products" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title">Productos y servicios</h2>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title" id="product-form-heading">NUEVO PRODUCTO</h3>
+          <form id="product-form">
+            <input type="hidden" id="pf-id" />
+            <div class="form-row-2 form-group">
+              <div>
+                <label for="pf-descripcion">Descripción *</label>
+                <input type="text" id="pf-descripcion" required placeholder="Ej: TABLERO ELÉCTRICO 24 POLOS EMBUTIDO" />
+              </div>
+              <div>
+                <label for="pf-precio">Precio unitario neto</label>
+                <input type="number" id="pf-precio" min="0" step="1" required placeholder="0" />
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 14px;">
+              <button type="submit" id="pf-submit-btn" class="btn btn-primary">Agregar producto</button>
+              <button type="button" id="pf-cancel-edit" class="btn btn-secondary hidden">Cancelar edición</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="filter-bar">
+          <input type="text" id="products-search" class="search-input" placeholder="Buscar producto" />
+          <button type="button" id="products-search-btn" class="btn btn-dark">Buscar</button>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Descripción</th>
+                <th class="text-right">Precio neto</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="products-table-body">
+              <tr><td colspan="3" class="empty-state">Cargando productos...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 5. USUARIOS ==================== -->
+      <section id="view-users" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title">Usuarios</h2>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title">NUEVO USUARIO ADMINISTRADOR</h3>
+          <form id="user-form">
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="uf-nombre">Nombre</label>
+                <input type="text" id="uf-nombre" required placeholder="Ej: Joshua Tapia" />
+              </div>
+              <div>
+                <label for="uf-correo">Correo (para ingresar)</label>
+                <input type="email" id="uf-correo" required placeholder="usuario@electromach.cl" />
+              </div>
+              <div>
+                <label for="uf-password">Contraseña (mín. 8)</label>
+                <input type="password" id="uf-password" minlength="8" required placeholder="••••••••" />
+              </div>
+            </div>
+            <div style="margin-top: 14px;">
+              <button type="submit" class="btn btn-primary">Crear usuario</button>
+            </div>
+            <p style="margin: 12px 0 0; font-size: 12px; color: var(--ink-muted);">
+              Todos los usuarios tienen acceso completo al sistema.
+            </p>
+          </form>
+        </div>
+
+        <div class="table-card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Correo</th>
+                <th>Creado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              <tr><td colspan="4" class="empty-state">Cargando usuarios...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ==================== 6. CONFIGURACIÓN ==================== -->
+      <section id="view-settings" class="app-view hidden">
+        <div class="page-header">
+          <h2 class="page-title">Configuración</h2>
+        </div>
+
+        <form id="settings-form">
+          <div class="card">
+            <h3 class="card-title">DATOS DE LA EMPRESA (ENCABEZADO DE LA COTIZACIÓN)</h3>
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="sf-razon-social">Razón social</label>
+                <input type="text" id="sf-razon-social" required />
+              </div>
+              <div>
+                <label for="sf-rut">RUT</label>
+                <input type="text" id="sf-rut" />
+              </div>
+              <div>
+                <label for="sf-telefono">Teléfono</label>
+                <input type="text" id="sf-telefono" />
+              </div>
+            </div>
+            <div class="form-row-2 form-group">
+              <div>
+                <label for="sf-sitio-web">Sitio web</label>
+                <input type="text" id="sf-sitio-web" />
+              </div>
+              <div>
+                <label for="sf-correo">Correo</label>
+                <input type="email" id="sf-correo" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">VALORES POR DEFECTO</h3>
+            <div class="form-row-3 form-group">
+              <div>
+                <label for="sf-iva">IVA (%)</label>
+                <input type="number" id="sf-iva" min="0" max="100" step="0.1" required />
+              </div>
+              <div>
+                <label for="sf-validez">Validez (días)</label>
+                <input type="number" id="sf-validez" min="1" required />
+              </div>
+              <div>
+                <label for="sf-next-quote">Próximo N° de cotización</label>
+                <input type="number" id="sf-next-quote" min="1" required />
+              </div>
+            </div>
+            <div class="form-row-2 form-group">
+              <div>
+                <label for="sf-next-order">Próximo N° de orden técnica</label>
+                <input type="number" id="sf-next-order" min="1" required />
+              </div>
+              <div>
+                <label for="sf-forma-pago">Forma de pago</label>
+                <input type="text" id="sf-forma-pago" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">PIE DE LA COTIZACIÓN</h3>
+            <div class="form-group">
+              <label for="sf-metodos-pago">Métodos de pago / datos bancarios</label>
+              <textarea id="sf-metodos-pago" rows="4"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="sf-terminos">Términos y condiciones</label>
+              <textarea id="sf-terminos" rows="5"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="sf-mensaje-final">Mensaje final</label>
+              <input type="text" id="sf-mensaje-final" />
+            </div>
+            <div style="margin-top: 16px;">
+              <button type="submit" class="btn btn-primary">Guardar configuración</button>
+            </div>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
